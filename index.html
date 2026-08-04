@@ -11,7 +11,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="icon" href="./icon-192.png">
-<title>Min LP-samling v2.0</title>
+<title>Min LP-samling v2.1</title>
 <style>
 :root{--bg:#f2f5f3;--card:#fff;--text:#17211e;--muted:#68756f;--line:#dce5e0;--green:#196b57;--green-dark:#153a32;--green2:#2d9479;--soft:#e8f4ef;--gold:#bd9559;--danger:#b64040;--shadow:0 10px 30px rgba(21,58,50,.09);--radius:20px}
 *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}
@@ -28,7 +28,7 @@ dialog{border:0;border-radius:22px;padding:0;width:min(94vw,580px);max-height:90
 </style>
 </head>
 <body>
-<header><div class="header-inner"><div class="title-wrap"><div class="logo" aria-hidden="true"></div><div><h1>Min LP-samling</h1><div class="subtitle">Din digitale platehylle</div></div></div><div class="version" aria-label="Appversjon">VERSJON 2.0</div></div></header>
+<header><div class="header-inner"><div class="title-wrap"><div class="logo" aria-hidden="true"></div><div><h1>Min LP-samling</h1><div class="subtitle">Din digitale platehylle</div></div></div><div class="version" aria-label="Appversjon">VERSJON 2.1</div></div></header>
 <main>
 <div class="toolbar"><div class="search-card"><div class="search-row"><div class="search-box"><span class="search-icon">⌕</span><input id="search" type="search" autocomplete="off" placeholder="Søk etter artist, band eller album"><button type="button" class="clear-search" id="clearSearch" aria-label="Tøm søk">×</button></div><button type="button" class="btn primary add-btn" id="addAlbum" aria-label="Legg til LP">+</button></div><div class="suggestions" id="suggestions"></div></div></div>
 <div class="install" id="installBanner"><p>Installer appen på startskjermen for rask tilgang.</p><button type="button" class="btn primary" id="installApp">Installer</button></div>
@@ -177,16 +177,63 @@ function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileRead
 function dataURLToBlob(data){const [meta,b64]=data.split(','),mime=meta.match(/:(.*?);/)[1],bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime})}
 async function exportData(){const out=[];for(const a of albums)out.push({...a});const blob=new Blob([JSON.stringify({app:'lp-samling',version:1,exportedAt:new Date().toISOString(),albums:out},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`lp-samling-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Sikkerhetskopien er lastet ned.')}
 async function importData(file){if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.albums))throw Error();if(!confirm(`Importere ${data.albums.length} LP-er? Dette erstatter samlingen som ligger på enheten nå.`))return;await clearStore();for(const a of data.albums){await put(a)}$('#backupDialog').close();await refresh();toast('Sikkerhetskopien er importert.')}catch(e){console.error(e);toast('Filen kunne ikke importeres.')}}
-async function migrateOldIndexedDB(){try{if(!('indexedDB'in window))return;await new Promise(resolve=>{const req=indexedDB.open('lp-samling-db');req.onerror=()=>resolve();req.onupgradeneeded=()=>{req.transaction.abort();resolve()};req.onsuccess=()=>{const db=req.result;if(!db.objectStoreNames.contains('albums')){db.close();resolve();return}const tx=db.transaction('albums','readonly'),get=tx.objectStore('albums').getAll();get.onerror=()=>{db.close();resolve()};get.onsuccess=()=>{const old=Array.isArray(get.result)?get.result:[];loadAlbums();const known=new Set(albums.map(a=>a.id||norm(`${a.artist}|${a.title}`)));let added=0;for(const a of old){const key=a.id||norm(`${a.artist}|${a.title}`);if(!known.has(key)){const copy={...a};if(copy.coverBlob instanceof Blob){const r=new FileReader();r.onload=()=>{};delete copy.coverBlob}albums.push(copy);known.add(key);added++}}if(added){try{persistAlbums();localStorage.setItem('lp-samling-idb-migrated-v2','1')}catch(e){console.warn(e)}}db.close();resolve()}}})}catch(e){console.warn('Kunne ikke kontrollere tidligere database',e)}}
+async function migrateOldIndexedDB(){
+ try{
+  const marker='lp-samling-idb-migrated-v2';
+  if(localStorage.getItem(marker)==='1') return;
+  loadAlbums();
+  const hasCurrentCollection=albums.length>0 || localStorage.getItem(STORAGE_KEY)!==null;
+  if(hasCurrentCollection){
+   localStorage.setItem(marker,'1');
+   return;
+  }
+  if(!('indexedDB'in window)){
+   localStorage.setItem(marker,'1');
+   return;
+  }
+  await new Promise(resolve=>{
+   const req=indexedDB.open('lp-samling-db');
+   req.onerror=()=>resolve();
+   req.onupgradeneeded=()=>{req.transaction.abort();resolve()};
+   req.onsuccess=()=>{
+    const db=req.result;
+    if(!db.objectStoreNames.contains('albums')){db.close();resolve();return}
+    const tx=db.transaction('albums','readonly');
+    const get=tx.objectStore('albums').getAll();
+    get.onerror=()=>{db.close();resolve()};
+    get.onsuccess=()=>{
+     const old=Array.isArray(get.result)?get.result:[];
+     const known=new Set();
+     albums=[];
+     for(const a of old){
+      const key=norm(`${a.artist}|${a.title}`);
+      if(!key || known.has(key)) continue;
+      const copy={...a,id:a.id||uid()};
+      delete copy.coverBlob;
+      albums.push(copy);
+      known.add(key);
+     }
+     if(albums.length) persistAlbums();
+     db.close();
+     resolve();
+    };
+   };
+  });
+  localStorage.setItem(marker,'1');
+ }catch(e){
+  console.warn('Kunne ikke kontrollere tidligere database',e);
+  try{localStorage.setItem('lp-samling-idb-migrated-v2','1')}catch(_){}
+ }
+}
 $$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());$('#addAlbum').onclick=openAdd;$('#saveAlbum').onclick=saveAlbum;$('#deleteAlbum').onclick=deleteAlbum;$('#findCover').onclick=findDigitalCover;$('#openBulkArtist').onclick=()=>openBulkArtist();$('#searchArtistAlbums').onclick=searchArtistAlbums;$('#bulkArtistInput').onkeydown=e=>{if(e.key==='Enter')searchArtistAlbums()};$('#saveSelectedAlbums').onclick=saveSelectedAlbums;$$('[data-view]').forEach(b=>b.onclick=()=>{activeView=b.dataset.view;selectedArtist='';syncViewButtons();render()});$('#cameraInput').onchange=e=>handleFile(e.target.files[0]);$('#fileInput').onchange=e=>handleFile(e.target.files[0]);$('#removeCover').onclick=()=>{workingCover=null;selectedOnlineUrl='';updatePreview()};$('#search').oninput=()=>{render();renderSuggestions()};$('#search').onfocus=renderSuggestions;$('#clearSearch').onclick=()=>{$('#search').value='';renderSuggestions();render();$('#search').focus()};document.addEventListener('click',e=>{if(!e.target.closest('.search-card'))$('#suggestions').classList.remove('show')});$$('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;$$('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));render()});$$('[data-sort]').forEach(b=>b.onclick=()=>{activeSort=b.dataset.sort;$$('[data-sort]').forEach(x=>x.classList.toggle('active',x===b));render()});$('#backupBtn').onclick=()=>$('#backupDialog').showModal();$('#exportData').onclick=exportData;$('#importData').onchange=e=>importData(e.target.files[0]);
 let swRegistration=null;
 if('serviceWorker'in navigator){
- addEventListener('load',async()=>{try{swRegistration=await navigator.serviceWorker.register('./service-worker.js?v=2.0',{updateViaCache:'none'});await swRegistration.update()}catch(e){console.warn(e)}});
+ addEventListener('load',async()=>{try{swRegistration=await navigator.serviceWorker.register('./service-worker.js?v=2.1',{updateViaCache:'none'});await swRegistration.update()}catch(e){console.warn(e)}});
  navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload());
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')swRegistration?.update().catch(()=>{})});
 }
 $('#updateAppBtn').onclick=async()=>{const b=$('#updateAppBtn');b.disabled=true;b.textContent='Kontrollerer …';try{if(swRegistration)await swRegistration.update();const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.update()));toast('Oppdatering kontrollert. Laster siden på nytt.');setTimeout(()=>location.reload(),500)}catch(e){location.reload()}finally{setTimeout(()=>{b.disabled=false;b.textContent='Hent siste versjon'},1200)}};let deferredPrompt=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBanner').classList.add('show')});$('#installApp').onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBanner').classList.remove('show')};addEventListener('appinstalled',()=>$('#installBanner').classList.remove('show'));
-(async()=>{try{const testKey='lp-test-v20';localStorage.setItem(testKey,'ok');if(localStorage.getItem(testKey)!=='ok')throw new Error('Lokal lagring er blokkert');localStorage.removeItem(testKey);await migrateOldIndexedDB();await refresh();syncViewButtons()}catch(e){console.error(e);document.querySelector('#collection').innerHTML='<div class="empty"><strong>Lagring er ikke tilgjengelig</strong><p>Åpne appen i en vanlig nettleser og tillat lokal lagring.</p></div>'}})();
+(async()=>{try{const testKey='lp-test-v21';localStorage.setItem(testKey,'ok');if(localStorage.getItem(testKey)!=='ok')throw new Error('Lokal lagring er blokkert');localStorage.removeItem(testKey);await migrateOldIndexedDB();await refresh();syncViewButtons()}catch(e){console.error(e);document.querySelector('#collection').innerHTML='<div class="empty"><strong>Lagring er ikke tilgjengelig</strong><p>Åpne appen i en vanlig nettleser og tillat lokal lagring.</p></div>'}})();
 </script>
 </body>
 </html>
