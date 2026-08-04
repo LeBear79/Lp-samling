@@ -1,4 +1,4 @@
-Min LP-samling v1.3
+Min LP-samling v1.4
 
 Last opp alle filene i denne mappen til samme mappe på GitHub.
 Versjon 1.3 bruker robust lokal lagring og komprimerer egne coverbilder automatisk.

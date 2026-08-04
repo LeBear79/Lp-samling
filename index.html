@@ -11,7 +11,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="icon" href="./icon-192.png">
-<title>Min LP-samling v1.3</title>
+<title>Min LP-samling v1.4</title>
 <style>
 :root{--bg:#f2f5f3;--card:#fff;--text:#17211e;--muted:#68756f;--line:#dce5e0;--green:#196b57;--green-dark:#153a32;--green2:#2d9479;--soft:#e8f4ef;--gold:#bd9559;--danger:#b64040;--shadow:0 10px 30px rgba(21,58,50,.09);--radius:20px}
 *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}
@@ -25,7 +25,7 @@ dialog{border:0;border-radius:22px;padding:0;width:min(94vw,580px);max-height:90
 </style>
 </head>
 <body>
-<header><div class="header-inner"><div class="title-wrap"><div class="logo" aria-hidden="true"></div><div><h1>Min LP-samling</h1><div class="subtitle">Din digitale platehylle</div></div></div><div class="version">v1.3</div></div></header>
+<header><div class="header-inner"><div class="title-wrap"><div class="logo" aria-hidden="true"></div><div><h1>Min LP-samling</h1><div class="subtitle">Din digitale platehylle</div></div></div><div class="version">v1.4</div></div></header>
 <main>
 <div class="toolbar"><div class="search-card"><div class="search-row"><div class="search-box"><span class="search-icon">⌕</span><input id="search" type="search" autocomplete="off" placeholder="Søk etter artist, band eller album"><button type="button" class="clear-search" id="clearSearch" aria-label="Tøm søk">×</button></div><button type="button" class="btn primary add-btn" id="addAlbum" aria-label="Legg til LP">+</button></div><div class="suggestions" id="suggestions"></div></div></div>
 <div class="install" id="installBanner"><p>Installer appen på startskjermen for rask tilgang.</p><button type="button" class="btn primary" id="installApp">Installer</button></div>
@@ -47,7 +47,7 @@ dialog{border:0;border-radius:22px;padding:0;width:min(94vw,580px);max-height:90
 <div class="field" style="margin-top:15px"><div class="switch-row"><div><strong>Signert</strong><div class="small">Marker dersom coveret eller platen er signert.</div></div><label class="switch"><input id="signedInput" type="checkbox"><span class="slider"></span></label></div></div>
 <div class="storage-note small" id="imageSizeNote">Coverbildet lagres lokalt på denne enheten.</div>
 </div>
-<div class="modal-actions"><button type="button" class="btn danger hidden" id="deleteAlbum">Slett</button><button type="button" class="btn ghost" data-close="albumDialog">Avbryt</button><button type="button" class="btn primary" id="saveAlbum">Lagre</button></div>
+<div id="saveError" class="hidden" style="margin:0 18px 10px;padding:10px 12px;border-radius:12px;background:#fff0f0;color:#9d3030;font-size:13px"></div><div class="modal-actions"><button type="button" class="btn danger hidden" id="deleteAlbum">Slett</button><button type="button" class="btn ghost" data-close="albumDialog">Avbryt</button><button type="button" class="btn primary" id="saveAlbum">Lagre</button></div>
 </dialog>
 
 <dialog id="backupDialog">
@@ -55,7 +55,8 @@ dialog{border:0;border-radius:22px;padding:0;width:min(94vw,580px);max-height:90
 </dialog>
 <div class="toast" id="toast"></div>
 <script>
-const STORAGE_KEY='lp-samling-v13';
+const STORAGE_KEY='lp-samling-v14';
+const OLD_STORAGE_KEYS=['lp-samling-v13','lp-samling-v12','lp-samling-v11','lp-samling-v10'];
 let albums=[], activeFilter='all', activeSort='artist', workingCover=null, selectedOnlineUrl='';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 function uid(){try{return crypto.randomUUID()}catch(e){return Date.now().toString(36)+Math.random().toString(36).slice(2)}}
@@ -63,19 +64,28 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),2600)}
 function loadAlbums(){
  try{
-  const raw=localStorage.getItem(STORAGE_KEY);
+  let raw=localStorage.getItem(STORAGE_KEY);
+  if(!raw){
+   for(const key of OLD_STORAGE_KEYS){
+    const candidate=localStorage.getItem(key);
+    if(candidate){raw=candidate;break;}
+   }
+  }
   albums=raw?JSON.parse(raw):[];
   if(!Array.isArray(albums)) albums=[];
  }catch(e){console.error(e);albums=[];}
 }
 function persistAlbums(){
  try{
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(albums));
+  const payload=JSON.stringify(albums);
+  localStorage.setItem(STORAGE_KEY,payload);
+  const check=localStorage.getItem(STORAGE_KEY);
+  if(check!==payload) throw new Error('Kontroll av lagringen mislyktes.');
   return true;
  }catch(e){
   console.error(e);
-  if(e && (e.name==='QuotaExceededError'||e.code===22)) throw new Error('Lagringsplassen på enheten er full.');
-  throw new Error('Nettleseren tillot ikke lokal lagring.');
+  if(e && (e.name==='QuotaExceededError'||e.code===22)) throw new Error('Bildet eller samlingen er for stor for nettleserens lagringsplass. Prøv uten bilde først.');
+  throw new Error('Nettleseren tillot ikke lokal lagring på denne siden.');
  }
 }
 async function getAll(){loadAlbums();return albums.slice()}
@@ -94,7 +104,7 @@ function norm(s){return String(s||'').toLocaleLowerCase('no').normalize('NFD').r
 function filteredAlbums(){const q=norm($('#search').value.trim());let list=albums.filter(a=>(activeFilter!=='signed'||a.signed)&&(!q||norm(a.artist).includes(q)||norm(a.title).includes(q)));list.sort((a,b)=>{if(activeSort==='newest')return (b.createdAt||0)-(a.createdAt||0);const key=activeSort==='album'?'title':'artist';return String(a[key]||'').localeCompare(String(b[key]||''),'no',{sensitivity:'base'})||String(a.title).localeCompare(String(b.title),'no')});return list}
 function render(){const list=filteredAlbums();$('#totalCount').textContent=albums.length;$('#artistCount').textContent=new Set(albums.map(a=>norm(a.artist)).filter(Boolean)).size;$('#signedCount').textContent=albums.filter(a=>a.signed).length;$('#resultCount').textContent=albums.length?`${list.length} av ${albums.length} vist`:'';const root=$('#collection');if(!albums.length){root.innerHTML='<div class="shelf"><div class="empty"><div class="record"></div><strong>Platehyllen er tom</strong><p>Trykk på + for å registrere den første LP-en.</p></div></div>';return}if(!list.length){root.innerHTML='<div class="empty"><strong>Ingen treff</strong><p>Prøv et annet søk eller filter.</p></div>';return}root.innerHTML=`<div class="shelf"><div class="album-grid">${list.map(a=>{const src=imageSrc(a)||placeholderSVG();return `<button type="button" class="album-card" data-id="${a.id}"><div class="cover-wrap"><img src="${esc(src)}" alt="Cover til ${esc(a.title)}">${a.signed?'<span class="signed-badge">SIGNERT</span>':''}</div><div class="album-info"><div class="album-title">${esc(a.title)}</div><div class="artist">${esc(a.artist)}</div></div></button>`}).join('')}</div></div>`;$$('.album-card').forEach(b=>b.onclick=()=>editAlbum(b.dataset.id))}
 function renderSuggestions(){const q=$('#search').value.trim(),box=$('#suggestions');$('#clearSearch').classList.toggle('show',!!q);if(!q){box.classList.remove('show');box.innerHTML='';return}const nq=norm(q),matches=albums.filter(a=>norm(a.artist).includes(nq)||norm(a.title).includes(nq)).slice(0,8);if(!matches.length){box.classList.remove('show');return}const hilite=s=>{const text=String(s),i=norm(text).indexOf(nq);return i<0?esc(text):esc(text.slice(0,i))+'<mark>'+esc(text.slice(i,i+q.length))+'</mark>'+esc(text.slice(i+q.length))};box.innerHTML=matches.map(a=>`<button type="button" class="suggestion" data-id="${a.id}"><img src="${esc(imageSrc(a)||placeholderSVG())}"><div><strong>${hilite(a.title)}</strong><span>${hilite(a.artist)}</span></div></button>`).join('');box.classList.add('show');$$('.suggestion').forEach(b=>b.onclick=()=>{box.classList.remove('show');editAlbum(b.dataset.id)})}
-function resetForm(){workingCover=null;selectedOnlineUrl='';$('#albumId').value='';$('#artistInput').value='';$('#titleInput').value='';$('#signedInput').checked=false;$('#onlineResults').innerHTML='';$('#onlineStatus').textContent='Skriv inn artist og albumtittel først.';$('#deleteAlbum').classList.add('hidden');$('#dialogTitle').textContent='Legg til LP';updatePreview()}
+function resetForm(){$('#saveError').classList.add('hidden');$('#saveError').textContent='';workingCover=null;selectedOnlineUrl='';$('#albumId').value='';$('#artistInput').value='';$('#titleInput').value='';$('#signedInput').checked=false;$('#onlineResults').innerHTML='';$('#onlineStatus').textContent='Skriv inn artist og albumtittel først.';$('#deleteAlbum').classList.add('hidden');$('#dialogTitle').textContent='Legg til LP';updatePreview()}
 function updatePreview(){const p=$('#coverPreview');if(workingCover){const src=workingCover instanceof Blob?URL.createObjectURL(workingCover):workingCover;p.innerHTML=`<img src="${esc(src)}" alt="Valgt cover">`}else p.textContent='Ingen cover valgt';const size=workingCover?(workingCover.startsWith?.('data:')?'Komprimert bilde lagres lokalt':'Digitalt cover lagres som lenke'):'Ingen bildefil valgt';$('#imageSizeNote').textContent=`Cover: ${size}. Data lagres lokalt på denne enheten.`}
 function openAdd(){resetForm();$('#albumDialog').showModal()}
 function editAlbum(id){const a=albums.find(x=>x.id===id);if(!a)return;resetForm();$('#albumId').value=a.id;$('#artistInput').value=a.artist;$('#titleInput').value=a.title;$('#signedInput').checked=!!a.signed;workingCover=a.coverBlob||a.coverUrl||null;$('#deleteAlbum').classList.remove('hidden');$('#dialogTitle').textContent='Rediger LP';updatePreview();$('#albumDialog').showModal()}
@@ -113,15 +123,31 @@ async function handleFile(file){
 }
 async function findDigitalCover(){const artist=$('#artistInput').value.trim(),title=$('#titleInput').value.trim();if(!artist&&!title){$('#onlineStatus').textContent='Skriv inn artist eller albumtittel først.';return}$('#findCover').disabled=true;$('#onlineStatus').textContent='Søker etter cover …';$('#onlineResults').innerHTML='';try{const term=encodeURIComponent([artist,title].filter(Boolean).join(' '));const r=await fetch(`https://itunes.apple.com/search?term=${term}&entity=album&limit=9&country=NO`);if(!r.ok)throw Error('Søk feilet');const data=await r.json();const unique=[];for(const x of data.results){const url=(x.artworkUrl100||'').replace('100x100bb','600x600bb');if(url&&!unique.some(y=>y.url===url))unique.push({url,artist:x.artistName,title:x.collectionName})}if(!unique.length){$('#onlineStatus').textContent='Fant ingen digitale cover. Bruk kamera eller velg et bilde.';return}$('#onlineStatus').textContent='Trykk på riktig cover for å velge det.';$('#onlineResults').innerHTML=unique.map((x,i)=>`<button type="button" class="online-cover" data-i="${i}" title="${esc(x.artist)} – ${esc(x.title)}"><img src="${esc(x.url)}" alt="${esc(x.title)}"></button>`).join('');$$('.online-cover').forEach(b=>b.onclick=()=>{workingCover=unique[Number(b.dataset.i)].url;selectedOnlineUrl=workingCover;$$('.online-cover').forEach(x=>x.classList.toggle('selected',x===b));updatePreview()})}catch(e){console.error(e);$('#onlineStatus').textContent='Cover-søket kunne ikke koble til internett. Du kan fortsatt bruke eget bilde.'}finally{$('#findCover').disabled=false}}
 async function saveAlbum(event){
- event?.preventDefault?.();
- const artist=$('#artistInput').value.trim(),title=$('#titleInput').value.trim();
- if(!artist||!title)return toast('Fyll inn artist og albumtittel.');
+ if(event && event.preventDefault) event.preventDefault();
+ const errorBox=$('#saveError');
+ errorBox.classList.add('hidden');errorBox.textContent='';
+ const artist=$('#artistInput').value.trim();
+ const title=$('#titleInput').value.trim();
+ if(!artist||!title){errorBox.textContent='Fyll inn både artist/band og albumtittel.';errorBox.classList.remove('hidden');return;}
  const button=$('#saveAlbum');button.disabled=true;button.textContent='Lagrer …';
- const id=$('#albumId').value||uid(),old=albums.find(a=>a.id===id);
- const item={id,artist,title,signed:$('#signedInput').checked,createdAt:old?.createdAt||Date.now(),updatedAt:Date.now(),coverUrl:typeof workingCover==='string'?workingCover:''};
- try{await put(item);await refresh();$('#albumDialog').close();toast(old?'LP-en er oppdatert.':'LP-en er lagt til.');}
- catch(e){console.error(e);toast(e?.message||'Kunne ikke lagre LP-en.');}
- finally{button.disabled=false;button.textContent='Lagre';}
+ const id=$('#albumId').value||uid();
+ const old=albums.find(function(a){return a.id===id;});
+ const item={id:id,artist:artist,title:title,signed:$('#signedInput').checked,createdAt:old?old.createdAt:Date.now(),updatedAt:Date.now(),coverUrl:typeof workingCover==='string'?workingCover:''};
+ try{
+  loadAlbums();
+  const pos=albums.findIndex(function(a){return a.id===id;});
+  if(pos>=0) albums[pos]=item; else albums.push(item);
+  persistAlbums();
+  loadAlbums();
+  if(!albums.some(function(a){return a.id===id;})) throw new Error('Platen kunne ikke leses tilbake etter lagring.');
+  render();
+  $('#albumDialog').close();
+  toast(old?'LP-en er oppdatert.':'LP-en er lagt til.');
+ }catch(e){
+  console.error(e);
+  errorBox.textContent=(e&&e.message)?e.message:'Kunne ikke lagre LP-en.';
+  errorBox.classList.remove('hidden');
+ }finally{button.disabled=false;button.textContent='Lagre';}
 }
 async function deleteAlbum(){const id=$('#albumId').value;if(!id||!confirm('Vil du slette denne LP-en fra samlingen?'))return;await del(id);$('#albumDialog').close();await refresh();toast('LP-en er slettet.')}
 function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob)})}
@@ -130,7 +156,7 @@ async function exportData(){const out=[];for(const a of albums)out.push({...a});
 async function importData(file){if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.albums))throw Error();if(!confirm(`Importere ${data.albums.length} LP-er? Dette erstatter samlingen som ligger på enheten nå.`))return;await clearStore();for(const a of data.albums){await put(a)}$('#backupDialog').close();await refresh();toast('Sikkerhetskopien er importert.')}catch(e){console.error(e);toast('Filen kunne ikke importeres.')}}
 $$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());$('#addAlbum').onclick=openAdd;$('#saveAlbum').onclick=saveAlbum;$('#deleteAlbum').onclick=deleteAlbum;$('#findCover').onclick=findDigitalCover;$('#cameraInput').onchange=e=>handleFile(e.target.files[0]);$('#fileInput').onchange=e=>handleFile(e.target.files[0]);$('#removeCover').onclick=()=>{workingCover=null;selectedOnlineUrl='';updatePreview()};$('#search').oninput=()=>{render();renderSuggestions()};$('#search').onfocus=renderSuggestions;$('#clearSearch').onclick=()=>{$('#search').value='';renderSuggestions();render();$('#search').focus()};document.addEventListener('click',e=>{if(!e.target.closest('.search-card'))$('#suggestions').classList.remove('show')});$$('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;$$('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));render()});$$('[data-sort]').forEach(b=>b.onclick=()=>{activeSort=b.dataset.sort;$$('[data-sort]').forEach(x=>x.classList.toggle('active',x===b));render()});$('#backupBtn').onclick=()=>$('#backupDialog').showModal();$('#exportData').onclick=exportData;$('#importData').onchange=e=>importData(e.target.files[0]);
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(console.warn));let deferredPrompt=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBanner').classList.add('show')});$('#installApp').onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBanner').classList.remove('show')};addEventListener('appinstalled',()=>$('#installBanner').classList.remove('show'));
-(async()=>{try{await refresh()}catch(e){console.error(e);document.querySelector('#collection').innerHTML='<div class="empty"><strong>Lagring er ikke tilgjengelig</strong><p>Åpne appen i en vanlig nettleser og tillat lokal lagring.</p></div>'}})();
+(async()=>{try{const testKey='lp-test-v14';localStorage.setItem(testKey,'ok');if(localStorage.getItem(testKey)!=='ok')throw new Error('Lokal lagring er blokkert');localStorage.removeItem(testKey);await refresh()}catch(e){console.error(e);document.querySelector('#collection').innerHTML='<div class="empty"><strong>Lagring er ikke tilgjengelig</strong><p>Åpne appen i en vanlig nettleser og tillat lokal lagring.</p></div>'}})();
 </script>
 </body>
 </html>
