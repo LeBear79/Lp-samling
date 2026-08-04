@@ -1,4 +1,8 @@
-Min LP-samling v1.5
+Min LP-samling v1.6
 
-Versjonsmerket VERSJON 1.5 vises fast øverst til høyre.
-Last opp alle filene og erstatt tidligere filer.
+Nyheter:
+- Søk kun på artist/band.
+- Trykk på albumcover for å fylle ut artist og albumtittel automatisk.
+- Versjonsmerket vises også på mobil.
+- Knapp for å hente siste versjon.
+- Forbedret PWA-oppdatering og cache.
