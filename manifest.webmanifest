@@ -2,11 +2,11 @@
   "name": "Min LP-samling",
   "short_name": "LP-samlingen",
   "description": "En enkel, lokal oversikt over LP-samlingen din.",
-  "start_url": "./index.html?v=1.6",
+  "start_url": "./index.html?v=2.2",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f2f5f3",
-  "theme_color": "#193a32",
+  "background_color": "#0d0e0e",
+  "theme_color": "#0d0e0e",
   "orientation": "portrait-primary",
   "icons": [
     {
