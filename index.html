@@ -11,7 +11,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="icon" href="./icon-192.png">
-<title>Min LP-samling v1.2</title>
+<title>Min LP-samling v1.3</title>
 <style>
 :root{--bg:#f2f5f3;--card:#fff;--text:#17211e;--muted:#68756f;--line:#dce5e0;--green:#196b57;--green-dark:#153a32;--green2:#2d9479;--soft:#e8f4ef;--gold:#bd9559;--danger:#b64040;--shadow:0 10px 30px rgba(21,58,50,.09);--radius:20px}
 *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}
@@ -25,7 +25,7 @@ dialog{border:0;border-radius:22px;padding:0;width:min(94vw,580px);max-height:90
 </style>
 </head>
 <body>
-<header><div class="header-inner"><div class="title-wrap"><div class="logo" aria-hidden="true"></div><div><h1>Min LP-samling</h1><div class="subtitle">Din digitale platehylle</div></div></div><div class="version">v1.2</div></div></header>
+<header><div class="header-inner"><div class="title-wrap"><div class="logo" aria-hidden="true"></div><div><h1>Min LP-samling</h1><div class="subtitle">Din digitale platehylle</div></div></div><div class="version">v1.3</div></div></header>
 <main>
 <div class="toolbar"><div class="search-card"><div class="search-row"><div class="search-box"><span class="search-icon">⌕</span><input id="search" type="search" autocomplete="off" placeholder="Søk etter artist, band eller album"><button type="button" class="clear-search" id="clearSearch" aria-label="Tøm søk">×</button></div><button type="button" class="btn primary add-btn" id="addAlbum" aria-label="Legg til LP">+</button></div><div class="suggestions" id="suggestions"></div></div></div>
 <div class="install" id="installBanner"><p>Installer appen på startskjermen for rask tilgang.</p><button type="button" class="btn primary" id="installApp">Installer</button></div>
@@ -55,71 +55,39 @@ dialog{border:0;border-radius:22px;padding:0;width:min(94vw,580px);max-height:90
 </dialog>
 <div class="toast" id="toast"></div>
 <script>
-const DB_NAME='lp-samling-db-v12', DB_VERSION=1, STORE='albums';
-let db, albums=[], activeFilter='all', activeSort='artist', workingCover=null, selectedOnlineUrl='';
+const STORAGE_KEY='lp-samling-v13';
+let albums=[], activeFilter='all', activeSort='artist', workingCover=null, selectedOnlineUrl='';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
+function uid(){try{return crypto.randomUUID()}catch(e){return Date.now().toString(36)+Math.random().toString(36).slice(2)}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),2200)}
-let dbPromise=null;
-function openDB(){
- if(db) return Promise.resolve(db);
- if(dbPromise) return dbPromise;
- dbPromise=new Promise((resolve,reject)=>{
-  if(!('indexedDB' in window)){reject(new Error('IndexedDB støttes ikke'));return}
-  const req=indexedDB.open(DB_NAME,DB_VERSION);
-  req.onupgradeneeded=()=>{
-   const database=req.result;
-   if(!database.objectStoreNames.contains(STORE)) database.createObjectStore(STORE,{keyPath:'id'});
-  };
-  req.onsuccess=()=>{
-   db=req.result;
-   db.onversionchange=()=>{db.close();db=null;dbPromise=null};
-   resolve(db);
-  };
-  req.onerror=()=>{dbPromise=null;reject(req.error||new Error('Databasen kunne ikke åpnes'))};
-  req.onblocked=()=>{dbPromise=null;reject(new Error('Databasen er blokkert'))};
- });
- return dbPromise;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove('show'),2600)}
+function loadAlbums(){
+ try{
+  const raw=localStorage.getItem(STORAGE_KEY);
+  albums=raw?JSON.parse(raw):[];
+  if(!Array.isArray(albums)) albums=[];
+ }catch(e){console.error(e);albums=[];}
 }
-async function getAll(){
- const database=await openDB();
- return new Promise((resolve,reject)=>{
-  const tx=database.transaction(STORE,'readonly');
-  const req=tx.objectStore(STORE).getAll();
-  req.onsuccess=()=>resolve(req.result||[]);
-  req.onerror=()=>reject(req.error||new Error('Kunne ikke lese samlingen'));
- });
+function persistAlbums(){
+ try{
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(albums));
+  return true;
+ }catch(e){
+  console.error(e);
+  if(e && (e.name==='QuotaExceededError'||e.code===22)) throw new Error('Lagringsplassen på enheten er full.');
+  throw new Error('Nettleseren tillot ikke lokal lagring.');
+ }
 }
+async function getAll(){loadAlbums();return albums.slice()}
 async function put(item){
- const database=await openDB();
- return new Promise((resolve,reject)=>{
-  const tx=database.transaction(STORE,'readwrite');
-  tx.objectStore(STORE).put(item);
-  tx.oncomplete=()=>resolve(item);
-  tx.onerror=()=>reject(tx.error||new Error('Kunne ikke lagre LP-en'));
-  tx.onabort=()=>reject(tx.error||new Error('Lagringen ble avbrutt'));
- });
+ const i=albums.findIndex(a=>a.id===item.id);
+ if(i>=0) albums[i]=item; else albums.push(item);
+ persistAlbums();
+ return item;
 }
-async function del(id){
- const database=await openDB();
- return new Promise((resolve,reject)=>{
-  const tx=database.transaction(STORE,'readwrite');
-  tx.objectStore(STORE).delete(id);
-  tx.oncomplete=()=>resolve();
-  tx.onerror=()=>reject(tx.error||new Error('Kunne ikke slette LP-en'));
- });
-}
-async function clearStore(){
- const database=await openDB();
- return new Promise((resolve,reject)=>{
-  const tx=database.transaction(STORE,'readwrite');
-  tx.objectStore(STORE).clear();
-  tx.oncomplete=()=>resolve();
-  tx.onerror=()=>reject(tx.error||new Error('Kunne ikke tømme samlingen'));
- });
-}
-async function refresh(){albums=await getAll();render()}
+async function del(id){albums=albums.filter(a=>a.id!==id);persistAlbums()}
+async function clearStore(){albums=[];persistAlbums()}
+async function refresh(){loadAlbums();render()}
 function imageSrc(album){return album.coverBlob?URL.createObjectURL(album.coverBlob):(album.coverUrl||'')}
 function placeholderSVG(){return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500"><rect width="500" height="500" fill="#e7ece9"/><circle cx="250" cy="250" r="170" fill="#17211e"/><circle cx="250" cy="250" r="62" fill="#bd9559"/><circle cx="250" cy="250" r="12" fill="#e7ece9"/><text x="250" y="460" text-anchor="middle" font-family="Arial" font-size="28" fill="#65736e">Mangler cover</text></svg>')}`}
 function norm(s){return String(s||'').toLocaleLowerCase('no').normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
@@ -127,11 +95,22 @@ function filteredAlbums(){const q=norm($('#search').value.trim());let list=album
 function render(){const list=filteredAlbums();$('#totalCount').textContent=albums.length;$('#artistCount').textContent=new Set(albums.map(a=>norm(a.artist)).filter(Boolean)).size;$('#signedCount').textContent=albums.filter(a=>a.signed).length;$('#resultCount').textContent=albums.length?`${list.length} av ${albums.length} vist`:'';const root=$('#collection');if(!albums.length){root.innerHTML='<div class="shelf"><div class="empty"><div class="record"></div><strong>Platehyllen er tom</strong><p>Trykk på + for å registrere den første LP-en.</p></div></div>';return}if(!list.length){root.innerHTML='<div class="empty"><strong>Ingen treff</strong><p>Prøv et annet søk eller filter.</p></div>';return}root.innerHTML=`<div class="shelf"><div class="album-grid">${list.map(a=>{const src=imageSrc(a)||placeholderSVG();return `<button type="button" class="album-card" data-id="${a.id}"><div class="cover-wrap"><img src="${esc(src)}" alt="Cover til ${esc(a.title)}">${a.signed?'<span class="signed-badge">SIGNERT</span>':''}</div><div class="album-info"><div class="album-title">${esc(a.title)}</div><div class="artist">${esc(a.artist)}</div></div></button>`}).join('')}</div></div>`;$$('.album-card').forEach(b=>b.onclick=()=>editAlbum(b.dataset.id))}
 function renderSuggestions(){const q=$('#search').value.trim(),box=$('#suggestions');$('#clearSearch').classList.toggle('show',!!q);if(!q){box.classList.remove('show');box.innerHTML='';return}const nq=norm(q),matches=albums.filter(a=>norm(a.artist).includes(nq)||norm(a.title).includes(nq)).slice(0,8);if(!matches.length){box.classList.remove('show');return}const hilite=s=>{const text=String(s),i=norm(text).indexOf(nq);return i<0?esc(text):esc(text.slice(0,i))+'<mark>'+esc(text.slice(i,i+q.length))+'</mark>'+esc(text.slice(i+q.length))};box.innerHTML=matches.map(a=>`<button type="button" class="suggestion" data-id="${a.id}"><img src="${esc(imageSrc(a)||placeholderSVG())}"><div><strong>${hilite(a.title)}</strong><span>${hilite(a.artist)}</span></div></button>`).join('');box.classList.add('show');$$('.suggestion').forEach(b=>b.onclick=()=>{box.classList.remove('show');editAlbum(b.dataset.id)})}
 function resetForm(){workingCover=null;selectedOnlineUrl='';$('#albumId').value='';$('#artistInput').value='';$('#titleInput').value='';$('#signedInput').checked=false;$('#onlineResults').innerHTML='';$('#onlineStatus').textContent='Skriv inn artist og albumtittel først.';$('#deleteAlbum').classList.add('hidden');$('#dialogTitle').textContent='Legg til LP';updatePreview()}
-function updatePreview(){const p=$('#coverPreview');if(workingCover){const src=workingCover instanceof Blob?URL.createObjectURL(workingCover):workingCover;p.innerHTML=`<img src="${esc(src)}" alt="Valgt cover">`}else p.textContent='Ingen cover valgt';const size=workingCover instanceof Blob?`${Math.max(1,Math.round(workingCover.size/1024))} kB`:(workingCover?'Digitalt cover – lagres som lenke':'Ingen bildefil valgt');$('#imageSizeNote').textContent=`Cover: ${size}. Data lagres lokalt på denne enheten.`}
+function updatePreview(){const p=$('#coverPreview');if(workingCover){const src=workingCover instanceof Blob?URL.createObjectURL(workingCover):workingCover;p.innerHTML=`<img src="${esc(src)}" alt="Valgt cover">`}else p.textContent='Ingen cover valgt';const size=workingCover?(workingCover.startsWith?.('data:')?'Komprimert bilde lagres lokalt':'Digitalt cover lagres som lenke'):'Ingen bildefil valgt';$('#imageSizeNote').textContent=`Cover: ${size}. Data lagres lokalt på denne enheten.`}
 function openAdd(){resetForm();$('#albumDialog').showModal()}
 function editAlbum(id){const a=albums.find(x=>x.id===id);if(!a)return;resetForm();$('#albumId').value=a.id;$('#artistInput').value=a.artist;$('#titleInput').value=a.title;$('#signedInput').checked=!!a.signed;workingCover=a.coverBlob||a.coverUrl||null;$('#deleteAlbum').classList.remove('hidden');$('#dialogTitle').textContent='Rediger LP';updatePreview();$('#albumDialog').showModal()}
-async function compressImage(file,max=700,quality=.78){const bitmap=await createImageBitmap(file);const scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height)),w=Math.max(1,Math.round(bitmap.width*scale)),h=Math.max(1,Math.round(bitmap.height*scale));const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d',{alpha:false}).drawImage(bitmap,0,0,w,h);bitmap.close?.();return await new Promise(res=>canvas.toBlob(b=>res(b),'image/webp',quality))}
-async function handleFile(file){if(!file)return;if(!file.type.startsWith('image/'))return toast('Velg en bildefil.');try{workingCover=await compressImage(file);selectedOnlineUrl='';updatePreview();toast('Bildet er komprimert.')}catch(e){console.error(e);toast('Kunne ikke behandle bildet.') }}
+async function compressImage(file,max=650,quality=.76){
+ const bitmap=await createImageBitmap(file);
+ const scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
+ const w=Math.max(1,Math.round(bitmap.width*scale)),h=Math.max(1,Math.round(bitmap.height*scale));
+ const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+ canvas.getContext('2d',{alpha:false}).drawImage(bitmap,0,0,w,h);bitmap.close?.();
+ return canvas.toDataURL('image/webp',quality);
+}
+async function handleFile(file){
+ if(!file)return;
+ if(!file.type.startsWith('image/'))return toast('Velg en bildefil.');
+ try{workingCover=await compressImage(file);selectedOnlineUrl='';updatePreview();toast('Bildet er komprimert og klart.')}catch(e){console.error(e);toast('Kunne ikke behandle bildet.')}
+}
 async function findDigitalCover(){const artist=$('#artistInput').value.trim(),title=$('#titleInput').value.trim();if(!artist&&!title){$('#onlineStatus').textContent='Skriv inn artist eller albumtittel først.';return}$('#findCover').disabled=true;$('#onlineStatus').textContent='Søker etter cover …';$('#onlineResults').innerHTML='';try{const term=encodeURIComponent([artist,title].filter(Boolean).join(' '));const r=await fetch(`https://itunes.apple.com/search?term=${term}&entity=album&limit=9&country=NO`);if(!r.ok)throw Error('Søk feilet');const data=await r.json();const unique=[];for(const x of data.results){const url=(x.artworkUrl100||'').replace('100x100bb','600x600bb');if(url&&!unique.some(y=>y.url===url))unique.push({url,artist:x.artistName,title:x.collectionName})}if(!unique.length){$('#onlineStatus').textContent='Fant ingen digitale cover. Bruk kamera eller velg et bilde.';return}$('#onlineStatus').textContent='Trykk på riktig cover for å velge det.';$('#onlineResults').innerHTML=unique.map((x,i)=>`<button type="button" class="online-cover" data-i="${i}" title="${esc(x.artist)} – ${esc(x.title)}"><img src="${esc(x.url)}" alt="${esc(x.title)}"></button>`).join('');$$('.online-cover').forEach(b=>b.onclick=()=>{workingCover=unique[Number(b.dataset.i)].url;selectedOnlineUrl=workingCover;$$('.online-cover').forEach(x=>x.classList.toggle('selected',x===b));updatePreview()})}catch(e){console.error(e);$('#onlineStatus').textContent='Cover-søket kunne ikke koble til internett. Du kan fortsatt bruke eget bilde.'}finally{$('#findCover').disabled=false}}
 async function saveAlbum(event){
  event?.preventDefault?.();
@@ -139,19 +118,19 @@ async function saveAlbum(event){
  if(!artist||!title)return toast('Fyll inn artist og albumtittel.');
  const button=$('#saveAlbum');button.disabled=true;button.textContent='Lagrer …';
  const id=$('#albumId').value||uid(),old=albums.find(a=>a.id===id);
- const item={id,artist,title,signed:$('#signedInput').checked,createdAt:old?.createdAt||Date.now(),updatedAt:Date.now(),coverBlob:workingCover instanceof Blob?workingCover:null,coverUrl:typeof workingCover==='string'?workingCover:''};
+ const item={id,artist,title,signed:$('#signedInput').checked,createdAt:old?.createdAt||Date.now(),updatedAt:Date.now(),coverUrl:typeof workingCover==='string'?workingCover:''};
  try{await put(item);await refresh();$('#albumDialog').close();toast(old?'LP-en er oppdatert.':'LP-en er lagt til.');}
- catch(e){console.error(e);toast('Kunne ikke lagre. Lukk appen helt og åpne v1.2 på nytt.');}
+ catch(e){console.error(e);toast(e?.message||'Kunne ikke lagre LP-en.');}
  finally{button.disabled=false;button.textContent='Lagre';}
 }
 async function deleteAlbum(){const id=$('#albumId').value;if(!id||!confirm('Vil du slette denne LP-en fra samlingen?'))return;await del(id);$('#albumDialog').close();await refresh();toast('LP-en er slettet.')}
 function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob)})}
 function dataURLToBlob(data){const [meta,b64]=data.split(','),mime=meta.match(/:(.*?);/)[1],bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime})}
-async function exportData(){const out=[];for(const a of albums)out.push({...a,coverBlob:a.coverBlob?await blobToDataURL(a.coverBlob):null});const blob=new Blob([JSON.stringify({app:'lp-samling',version:1,exportedAt:new Date().toISOString(),albums:out},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`lp-samling-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Sikkerhetskopien er lastet ned.')}
-async function importData(file){if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.albums))throw Error();if(!confirm(`Importere ${data.albums.length} LP-er? Dette erstatter samlingen som ligger på enheten nå.`))return;await clearStore();for(const a of data.albums){if(typeof a.coverBlob==='string'&&a.coverBlob.startsWith('data:'))a.coverBlob=dataURLToBlob(a.coverBlob);await put(a)}$('#backupDialog').close();await refresh();toast('Sikkerhetskopien er importert.')}catch(e){console.error(e);toast('Filen kunne ikke importeres.')}}
+async function exportData(){const out=[];for(const a of albums)out.push({...a});const blob=new Blob([JSON.stringify({app:'lp-samling',version:1,exportedAt:new Date().toISOString(),albums:out},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`lp-samling-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Sikkerhetskopien er lastet ned.')}
+async function importData(file){if(!file)return;try{const data=JSON.parse(await file.text());if(!Array.isArray(data.albums))throw Error();if(!confirm(`Importere ${data.albums.length} LP-er? Dette erstatter samlingen som ligger på enheten nå.`))return;await clearStore();for(const a of data.albums){await put(a)}$('#backupDialog').close();await refresh();toast('Sikkerhetskopien er importert.')}catch(e){console.error(e);toast('Filen kunne ikke importeres.')}}
 $$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());$('#addAlbum').onclick=openAdd;$('#saveAlbum').onclick=saveAlbum;$('#deleteAlbum').onclick=deleteAlbum;$('#findCover').onclick=findDigitalCover;$('#cameraInput').onchange=e=>handleFile(e.target.files[0]);$('#fileInput').onchange=e=>handleFile(e.target.files[0]);$('#removeCover').onclick=()=>{workingCover=null;selectedOnlineUrl='';updatePreview()};$('#search').oninput=()=>{render();renderSuggestions()};$('#search').onfocus=renderSuggestions;$('#clearSearch').onclick=()=>{$('#search').value='';renderSuggestions();render();$('#search').focus()};document.addEventListener('click',e=>{if(!e.target.closest('.search-card'))$('#suggestions').classList.remove('show')});$$('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;$$('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));render()});$$('[data-sort]').forEach(b=>b.onclick=()=>{activeSort=b.dataset.sort;$$('[data-sort]').forEach(x=>x.classList.toggle('active',x===b));render()});$('#backupBtn').onclick=()=>$('#backupDialog').showModal();$('#exportData').onclick=exportData;$('#importData').onchange=e=>importData(e.target.files[0]);
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(console.warn));let deferredPrompt=null;addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('#installBanner').classList.add('show')});$('#installApp').onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBanner').classList.remove('show')};addEventListener('appinstalled',()=>$('#installBanner').classList.remove('show'));
-(async()=>{try{await openDB();await refresh()}catch(e){console.error(e);document.querySelector('#collection').innerHTML='<div class="empty"><strong>Lagring er ikke tilgjengelig</strong><p>Åpne appen i en vanlig nettleser og tillat lokal lagring.</p></div>'}})();
+(async()=>{try{await refresh()}catch(e){console.error(e);document.querySelector('#collection').innerHTML='<div class="empty"><strong>Lagring er ikke tilgjengelig</strong><p>Åpne appen i en vanlig nettleser og tillat lokal lagring.</p></div>'}})();
 </script>
 </body>
 </html>
