@@ -1,23 +1,18 @@
-MIN LP-SAMLING v1.0
+MIN LP-SAMLING – VERSJON 2.0
 
-Last opp alle filene i denne mappen til samme mappe i GitHub-repositoriet ditt:
-- index.html
-- manifest.webmanifest
-- service-worker.js
-- icon-192.png
-- icon-512.png
+LAST OPP
+Last opp alle filene i denne mappen til samme plassering som den tidligere versjonen.
 
-Appen lagrer LP-er og egne, komprimerte coverbilder lokalt i IndexedDB på enheten.
-Bruk Sikkerhetskopi-knappen regelmessig for å eksportere samlingen til en JSON-fil.
+VIKTIG OM EKSISTERENDE PLATER
+- V2.0 bruker nøyaktig samme lagringsnøkkel som versjon 1.6: lp-samling-v14.
+- Oppdateringen tømmer eller erstatter ikke samlingen.
+- Appen forsøker også å finne plater som kan ligge igjen i den eldre IndexedDB-databasen og legger bare til manglende plater.
+- Ikke slett nettleserdata eller avinstaller PWA-en før du har eksportert en sikkerhetskopi.
 
-Digitalt cover-søk krever internett. Resten av appen kan brukes uten internett etter at PWA-en er lastet inn én gang.
-
-Merk: v1.0 kan søke etter digitale cover når artist og album er skrevet inn. Automatisk identifisering av artist og album direkte fra et bilde krever en ekstern bildeanalyse-tjeneste og er ikke aktivert i denne lokale versjonen.
-
-
-NYTT I V1.1
-- Henter opptil 200 albumutgivelser fra en artistkatalog.
-- Søker i både norsk og amerikansk katalog for bedre dekning.
-- Registrer flere album fra samme artist samtidig.
-- Velg signert/ikke signert for hvert album i flervalgslisten.
-- Hopper over album som allerede er registrert.
+NYTT
+- Artister A–Å er standardvisning.
+- Trykk på en artist for å se bare artistens LP-er.
+- Bytt mellom Artister A–Å og Alle LP-er.
+- Legg til én eller flere LP-er direkte inne hos artisten.
+- Enkeltregistrering henter nå samme store albumkatalog som flervalgssøket.
+- Hele katalogen kan inneholde opptil rundt 200 treff per marked, avhengig av hva Apple Music-katalogen har tilgjengelig.
