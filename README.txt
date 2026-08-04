@@ -1,8 +1,8 @@
-MIN LP-SAMLING – VERSJON 2.3
+MIN LP-SAMLING – VERSJON 2.4
 
-Endring i denne versjonen:
-- Bokstaven vises nå bare én gang, inne i vinylsirkelen.
-- Antall artister og LP-er står ved siden av uten gjentatt bokstav.
-- Ingen endringer i lagring, registrerte plater eller øvrige funksjoner.
+Nytt i denne versjonen:
+- Viser totalantall artister, LP-er og signerte LP-er i toppfeltet.
+- Oversikten oppdateres automatisk når plater legges til, endres eller slettes.
+- Samme lagring og database som i v2.3. Ingen migrering eller ny import kjøres.
 
-Last opp alle filene til samme mappe i GitHub som tidligere.
+Last opp alle filene til samme GitHub-mappe som den eksisterende appen.
