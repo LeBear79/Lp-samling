@@ -1,10 +1,9 @@
-MIN LP-SAMLING – VERSJON 2.4
+MIN LP-SAMLING – VERSJON 2.6
 
-Nytt i denne versjonen:
-- Viser totalantall artister, LP-er og signerte LP-er i toppfeltet.
-- Oversikten oppdateres automatisk når plater legges til, endres eller slettes.
-- Samme lagring og database som i v2.3. Ingen migrering eller ny import kjøres.
-
-Last opp alle filene til samme GitHub-mappe som den eksisterende appen.
-
-Versjon 2.5: Overrask meg velger en tilfeldig LP, viser en 5 sekunders vinylanimasjon og unngår de 10 siste valgene så langt samlingen tillater det.
+Nytt:
+- Tydelig «Overrask meg»-knapp med LP-symbol og tekst, også på mobil.
+- Albumcoveret kommer roterende fra avstand og vokser til full størrelse.
+- LP-platen glir deretter ut av coveret og snurrer.
+- Valgene vises etter omtrent 2 sekunder.
+- De 10 siste tilfeldige valgene unngås så langt samlingen tillater det.
+- Eksisterende lagring og database er uendret.

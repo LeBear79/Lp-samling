@@ -2,7 +2,7 @@
   "name": "Min LP-samling",
   "short_name": "LP-samlingen",
   "description": "En enkel, lokal oversikt over LP-samlingen din.",
-  "start_url": "./index.html?v=2.2",
+  "start_url": "./index.html?v=2.6",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0d0e0e",
